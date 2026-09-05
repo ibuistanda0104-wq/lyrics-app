@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>智慧歌詞與寫歌工坊 (大容量版)</title>
+  <title>智慧歌詞與寫歌工坊</title>
   <meta name="theme-color" content="#2563eb">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -30,7 +30,7 @@
     <header class="bg-slate-900 text-white pt-6 pb-4 px-4 shadow-md sticky top-0 z-30">
       <div class="flex items-center justify-between">
         <h1 class="text-base font-bold tracking-wide flex items-center gap-2">
-          <span>🎵</span> 智慧歌詞工坊 (大容量)
+          <span>🎵</span> 智慧歌詞工坊
         </h1>
         <div class="flex gap-2">
           <span class="text-xs bg-blue-600 px-2 py-1 rounded-lg text-white font-medium self-center">共 {{ songs.length }} 首</span>
@@ -44,26 +44,33 @@
 
       <!-- 拖曳上傳提示橫幅 -->
       <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-3 text-center text-xs text-blue-700">
-        📁 支援大容量 IndexedDB：可一次拖曳數百個 <b>PDF</b>、<b>Word</b> 檔自動建檔！
+        📁 可直接拖曳 <b>PDF</b>、<b>Word (.docx)</b> 或文字檔自動批次建檔！
       </div>
 
       <!-- Tab 1: 歌詞庫與搜尋 -->
       <div v-show="activeTab === 'library'" class="space-y-4">
         <div class="flex gap-2">
-          <input type="text" v-model="searchKeyword" placeholder="🔍 搜尋 2000+ 首歌曲、作者或歌詞關鍵字..." class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="text" v-model="searchKeyword" placeholder="🔍 搜尋歌名、作者或歌詞關鍵字..." class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
 
         <div class="space-y-2">
           <div v-if="filteredSongs.length === 0" class="bg-white rounded-2xl p-8 text-center text-slate-400 text-sm border border-slate-200">
-            尚無歌詞資料，請至「寫歌創作」新增或直接拖曳 PDF / Word 檔案進來 🎼
+            尚無歌詞資料，請至「寫歌創作」新增或直接拖曳檔案進來 🎼
           </div>
-          <div v-for="song in filteredSongs" :key="song.id" @click="openSongDetail(song)" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 active:bg-slate-50 cursor-pointer transition space-y-1">
-            <div class="flex justify-between items-start">
-              <h3 class="font-bold text-slate-800 text-base">{{ song.title }}</h3>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold">Key: {{ song.key || 'C' }}</span>
+          <div v-for="song in filteredSongs" :key="song.id" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 transition space-y-2">
+            <div @click="openSongDetail(song)" class="cursor-pointer space-y-1">
+              <div class="flex justify-between items-start">
+                <h3 class="font-bold text-slate-800 text-base">{{ song.title }}</h3>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold">Key: {{ song.key || 'C' }}</span>
+              </div>
+              <p class="text-xs text-slate-500">作者 / 來源：{{ song.artist || '未填寫' }}</p>
+              <p class="text-xs text-slate-400 truncate mt-1">{{ (song.content || '').substring(0, 40) }}...</p>
             </div>
-            <p class="text-xs text-slate-500">作者 / 來源：{{ song.artist || '未填寫' }}</p>
-            <p class="text-xs text-slate-400 truncate mt-1">{{ (song.content || '').substring(0, 40) }}...</p>
+            <!-- 卡片快捷按鈕：修改與刪除 -->
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button @click.stop="openEditModal(song)" class="px-3 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-100 transition">✏️ 修改</button>
+              <button @click.stop="deleteSong(song.id)" class="px-3 py-1 bg-rose-50 text-rose-600 rounded-lg text-xs font-bold hover:bg-rose-100 transition">🗑️ 刪除</button>
+            </div>
           </div>
         </div>
       </div>
@@ -84,7 +91,7 @@
             <div>
               <label class="text-xs font-semibold text-slate-500 mb-1 block">調性 (Key)</label>
               <select v-model="songForm.key" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 text-sm">
-                <option v-for="k in ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Am', 'Em', 'Dm', 'Bm']" :key="k" :value="k">{{ k }}</option>
+                <option v-for="k in ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Am', 'Em', 'Dm', 'Bm', 'F#', 'Bb', 'Eb']" :key="k" :value="k">{{ k }}</option>
               </select>
             </div>
           </div>
@@ -110,27 +117,76 @@
       </div>
     </main>
 
-    <!-- 檢視歌詞與和弦切換彈窗 -->
+    <!-- 檢視歌詞與換 Key / 模式切換彈窗 -->
     <div v-if="detailModal.visible" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div class="bg-white w-full max-w-md h-[85vh] rounded-t-3xl sm:rounded-3xl p-5 flex flex-col space-y-3">
+      <div class="bg-white w-full max-w-md h-[90vh] rounded-t-3xl sm:rounded-3xl p-5 flex flex-col space-y-3">
         <div class="flex justify-between items-center border-b pb-3">
           <div>
             <h3 class="text-base font-bold text-slate-800">{{ detailModal.song.title }}</h3>
-            <span class="text-xs text-slate-400">Key: {{ detailModal.song.key }} | {{ detailModal.song.artist }}</span>
+            <span class="text-xs text-slate-400">作者：{{ detailModal.song.artist }}</span>
           </div>
           <button @click="detailModal.visible = false" class="text-slate-400 text-lg font-bold px-2">✕</button>
         </div>
 
-        <div class="flex bg-slate-100 p-1 rounded-xl">
-          <button @click="showChords = true" :class="showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600'" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">🎸 顯示和弦</button>
-          <button @click="showChords = false" :class="!showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600'" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">📜 純歌詞模式</button>
+        <!-- 換 Key 快捷列與模式切換 -->
+        <div class="flex items-center justify-between bg-slate-100 p-2 rounded-xl gap-2">
+          <div class="flex items-center gap-1 text-xs font-bold text-slate-700">
+            <span>🎵 換 Key:</span>
+            <select v-model="detailModal.song.key" @change="updateSongKey(detailModal.song)" class="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-blue-600 focus:outline-none">
+              <option v-for="k in ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Am', 'Em', 'Dm', 'Bm', 'F#', 'Bb', 'Eb']" :key="k" :value="k">{{ k }}</option>
+            </select>
+          </div>
+          <div class="flex gap-1">
+            <button @click="showChords = true" :class="showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600 bg-white'" class="px-3 py-1 rounded-lg text-xs font-bold transition">🎸 和弦</button>
+            <button @click="showChords = false" :class="!showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600 bg-white'" class="px-3 py-1 rounded-lg text-xs font-bold transition">📜 純詞</button>
+          </div>
         </div>
 
+        <!-- 歌詞內文預覽 -->
         <div class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-4 overflow-y-auto font-mono text-sm leading-relaxed whitespace-pre-wrap" v-html="renderedLyrics"></div>
 
         <div class="flex gap-2 pt-2">
-          <button @click="deleteSong(detailModal.song.id)" class="py-2.5 px-4 bg-rose-100 text-rose-600 rounded-xl text-xs font-bold">🗑️ 刪除</button>
-          <button @click="detailModal.visible = false" class="flex-1 py-2.5 bg-slate-800 text-white rounded-xl text-xs font-bold">關閉</button>
+          <button @click="openEditModal(detailModal.song); detailModal.visible = false;" class="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-xs font-bold shadow">✏️ 修改內容</button>
+          <button @click="deleteSong(detailModal.song.id); detailModal.visible = false;" class="py-2.5 px-4 bg-rose-100 text-rose-600 rounded-xl text-xs font-bold">🗑️ 刪除</button>
+          <button @click="detailModal.visible = false" class="py-2.5 px-4 bg-slate-800 text-white rounded-xl text-xs font-bold">關閉</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 編輯歌曲彈窗 (Modal) -->
+    <div v-if="editModal.visible" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div class="bg-white w-full max-w-md h-[85vh] rounded-t-3xl sm:rounded-3xl p-5 flex flex-col space-y-3">
+        <div class="flex justify-between items-center border-b pb-3">
+          <h3 class="text-base font-bold text-slate-800">✏️ 修改歌詞資料</h3>
+          <button @click="editModal.visible = false" class="text-slate-400 text-lg font-bold px-2">✕</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+          <div>
+            <label class="text-xs font-semibold text-slate-500 mb-1 block">歌名</label>
+            <input type="text" v-model="editModal.song.title" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-xs font-semibold text-slate-500 mb-1 block">作者 / 歌手</label>
+              <input type="text" v-model="editModal.song.artist" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500 mb-1 block">調性 (Key)</label>
+              <select v-model="editModal.song.key" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 text-sm">
+                <option v-for="k in ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Am', 'Em', 'Dm', 'Bm', 'F#', 'Bb', 'Eb']" :key="k" :value="k">{{ k }}</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500 mb-1 block">歌詞內容 (支援 [C]和弦格式)</label>
+            <textarea v-model="editModal.song.content" rows="10" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:outline-none font-mono"></textarea>
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button @click="saveEditedSong" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow hover:bg-blue-700 transition">💾 儲存修改</button>
+          <button @click="editModal.visible = false" class="py-3 px-5 bg-slate-200 text-slate-700 rounded-xl font-bold">取消</button>
         </div>
       </div>
     </div>
@@ -151,7 +207,6 @@
   <script>
     const { createApp, ref, computed, onMounted } = Vue;
 
-    // IndexedDB 輔助層 (大容量支援 2000+ 檔案)
     const dbName = 'LyricsAppDB';
     const storeName = 'songs';
 
@@ -211,15 +266,14 @@
 
         const songForm = ref({ title: '', artist: '', key: 'C', content: '' });
         const detailModal = ref({ visible: false, song: {} });
+        const editModal = ref({ visible: false, song: {} });
 
-        // 初始化載入 IndexedDB 資料
         onMounted(async () => {
           try {
             const data = await dbGetAll();
             if (data && data.length > 0) {
               songs.value = data.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
             } else {
-              // 預設示範曲
               const defaultSong = {
                 id: '1',
                 title: '晴天範例曲',
@@ -246,7 +300,6 @@
           );
         });
 
-        // 支援批次拖曳大量 PDF、Word 檔案自動匯入
         const handleFileDrop = async (e) => {
           const files = e.dataTransfer.files;
           if (!files.length) return;
@@ -326,7 +379,7 @@
 
           if (count > 0) {
             activeTab.value = 'library';
-            alert(`✅ 成功批次匯入 ${count} 個檔案進資料庫！`);
+            alert(`✅ 成功批次匯入 ${count} 個檔案！`);
           }
         };
 
@@ -347,17 +400,45 @@
           songs.value.unshift(newSong);
           songForm.value = { title: '', artist: '', key: 'C', content: '' };
           activeTab.value = 'library';
-          alert('✅ 歌曲已成功儲存至大容量資料庫！');
+          alert('✅ 歌曲已成功儲存！');
         };
 
         const openSongDetail = (song) => {
-          detailModal.value.song = song;
+          detailModal.value.song = { ...song };
           showChords.value = true;
           detailModal.value.visible = true;
         };
 
+        const openEditModal = (song) => {
+          editModal.value.song = { ...song };
+          editModal.value.visible = true;
+        };
+
+        const saveEditedSong = async () => {
+          const s = editModal.value.song;
+          if (!s.title.trim() || !s.content.trim()) {
+            alert('歌名與內容不得為空白！');
+            return;
+          }
+          await dbPut(s);
+          const index = songs.value.findIndex(item => item.id === s.id);
+          if (index !== -1) {
+            songs.value[index] = { ...s };
+          }
+          editModal.value.visible = false;
+          alert('✅ 歌曲修改已儲存！');
+        };
+
+        const updateSongKey = async (song) => {
+          await dbPut(song);
+          const index = songs.value.findIndex(item => item.id === song.id);
+          if (index !== -1) {
+            songs.value[index].key = song.key;
+          }
+        };
+
         const deleteSong = async (id) => {
-          if (confirm('確定要刪除這首歌曲嗎？')) {
+          if (confirm('確定要徹底刪除這首歌曲嗎？')) {
             await dbDelete(id);
             songs.value = songs.value.filter(s => s.id !== id);
             detailModal.value.visible = false;
@@ -387,13 +468,13 @@
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Lyrics_LargeScale_Backup_${new Date().toISOString().substring(0,10)}.json`;
+          a.download = `Lyrics_Backup_${new Date().toISOString().substring(0,10)}.json`;
           a.click();
         };
 
         return {
-          activeTab, searchKeyword, showChords, songs, songForm, detailModal,
-          filteredSongs, handleFileDrop, saveSong, openSongDetail, deleteSong, insertChord, renderedLyrics, exportJSON
+          activeTab, searchKeyword, showChords, songs, songForm, detailModal, editModal,
+          filteredSongs, handleFileDrop, saveSong, openSongDetail, openEditModal, saveEditedSong, updateSongKey, deleteSong, insertChord, renderedLyrics, exportJSON
         };
       }
     }).mount('#app');
