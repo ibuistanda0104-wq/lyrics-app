@@ -23,8 +23,9 @@
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased flex flex-col min-h-screen">
+  <!-- 綁定事件加入 .stop 確保完美攔截拖放 -->
   <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-50 shadow-2xl relative"
-       @dragover.prevent @drop.prevent="handleFileDrop">
+       @dragover.prevent.stop @drop.prevent.stop="handleFileDrop">
 
     <!-- 頂部 Header -->
     <header class="bg-slate-900 text-white pt-6 pb-4 px-4 shadow-md sticky top-0 z-30">
