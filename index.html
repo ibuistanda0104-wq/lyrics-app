@@ -23,7 +23,7 @@
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased flex flex-col min-h-screen">
-  <!-- 綁定事件加入 .stop 確保完美攔截拖放 -->
+  <!-- 綁定事件阻擋預設行為 -->
   <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-50 shadow-2xl relative"
        @dragover.prevent.stop @drop.prevent.stop="handleFileDrop">
 
@@ -43,9 +43,13 @@
     <!-- 主內容區 -->
     <main class="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-4">
 
-      <!-- 拖曳上傳提示橫幅 -->
-      <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-3 text-center text-xs text-blue-700">
-        📁 直接將 <b>PDF</b>、<b>Word (.docx)</b> 或 <b>.txt</b> 檔案拖曳至此處即可自動寫入App！
+      <!-- 拖曳與按鈕雙重上傳區塊 -->
+      <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-4 text-center space-y-2">
+        <p class="text-xs text-blue-700 font-bold">📁 可將 PDF、Word 檔案直接拖曳至此，或點擊下方按鈕批次選取！</p>
+        <label class="inline-block bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow hover:bg-blue-700 transition">
+          📂 點此批次選取檔案上傳 (支援多選)
+          <input type="file" multiple accept=".pdf,.docx,.txt,.md" @change="handleFileSelect" class="hidden">
+        </label>
       </div>
 
       <!-- Tab 1: 歌詞庫與搜尋 -->
@@ -56,7 +60,7 @@
 
         <div class="space-y-2">
           <div v-if="filteredSongs.length === 0" class="bg-white rounded-2xl p-8 text-center text-slate-400 text-sm border border-slate-200">
-            尚無歌詞資料，請至「寫歌創作」新增或直接拖曳檔案進來 🎼
+            尚無歌詞資料，請至「寫歌創作」新增或上傳檔案 🎼
           </div>
           <div v-for="song in filteredSongs" :key="song.id" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 transition space-y-2">
             <div @click="openSongDetail(song)" class="cursor-pointer space-y-1">
@@ -206,6 +210,10 @@
   <script>
     const { createApp, ref, computed, onMounted } = Vue;
 
+    // 全域防止瀏覽器預設開啟檔案行為 (解決畫面閃一下與跳轉問題)
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => e.preventDefault());
+
     const dbName = 'LyricsAppDB';
     const storeName = 'songs';
 
@@ -299,10 +307,9 @@
           );
         });
 
-        // 強固版檔案拖曳解析與 IndexedDB 寫入
-        const handleFileDrop = async (e) => {
-          const files = e.dataTransfer.files;
-          if (!files.length) return;
+        // 共用檔案解析核心邏輯
+        const processFiles = async (files) => {
+          if (!files || !files.length) return;
 
           let count = 0;
           for (let file of files) {
@@ -352,6 +359,19 @@
           } else {
             alert('⚠️ 無法解析檔案內容，請確認檔案格式是否正確或是否有文字圖層。');
           }
+        };
+
+        // 支援拖曳匯入
+        const handleFileDrop = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await processFiles(e.dataTransfer.files);
+        };
+
+        // 支援點擊按鈕選取匯入 (最推薦，可一次選取多個檔案)
+        const handleFileSelect = async (e) => {
+          await processFiles(e.target.files);
+          e.target.value = ''; // 清空以允許重複選取相同檔案
         };
 
         const saveSong = async () => {
@@ -445,7 +465,7 @@
 
         return {
           activeTab, searchKeyword, showChords, songs, songForm, detailModal, editModal,
-          filteredSongs, handleFileDrop, saveSong, openSongDetail, openEditModal, saveEditedSong, updateSongKey, deleteSong, insertChord, renderedLyrics, exportJSON
+          filteredSongs, handleFileDrop, handleFileSelect, saveSong, openSongDetail, openEditModal, saveEditedSong, updateSongKey, deleteSong, insertChord, renderedLyrics, exportJSON
         };
       }
     }).mount('#app');
