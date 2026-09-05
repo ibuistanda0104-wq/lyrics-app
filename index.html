@@ -44,7 +44,7 @@
 
       <!-- 拖曳上傳提示橫幅 -->
       <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-3 text-center text-xs text-blue-700">
-        📁 可直接拖曳 <b>PDF</b>、<b>Word (.docx)</b> 或文字檔自動批次建檔！
+        📁 直接將 <b>PDF</b>、<b>Word (.docx)</b> 或 <b>.txt</b> 檔案拖曳至此處即可自動寫入App！
       </div>
 
       <!-- Tab 1: 歌詞庫與搜尋 -->
@@ -66,7 +66,7 @@
               <p class="text-xs text-slate-500">作者 / 來源：{{ song.artist || '未填寫' }}</p>
               <p class="text-xs text-slate-400 truncate mt-1">{{ (song.content || '').substring(0, 40) }}...</p>
             </div>
-            <!-- 卡片快捷按鈕：修改與刪除 -->
+            <!-- 卡片操作列 -->
             <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button @click.stop="openEditModal(song)" class="px-3 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-100 transition">✏️ 修改</button>
               <button @click.stop="deleteSong(song.id)" class="px-3 py-1 bg-rose-50 text-rose-600 rounded-lg text-xs font-bold hover:bg-rose-100 transition">🗑️ 刪除</button>
@@ -117,7 +117,7 @@
       </div>
     </main>
 
-    <!-- 檢視歌詞與換 Key / 模式切換彈窗 -->
+    <!-- 檢視歌詞與換 Key 彈窗 -->
     <div v-if="detailModal.visible" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div class="bg-white w-full max-w-md h-[90vh] rounded-t-3xl sm:rounded-3xl p-5 flex flex-col space-y-3">
         <div class="flex justify-between items-center border-b pb-3">
@@ -128,7 +128,6 @@
           <button @click="detailModal.visible = false" class="text-slate-400 text-lg font-bold px-2">✕</button>
         </div>
 
-        <!-- 換 Key 快捷列與模式切換 -->
         <div class="flex items-center justify-between bg-slate-100 p-2 rounded-xl gap-2">
           <div class="flex items-center gap-1 text-xs font-bold text-slate-700">
             <span>🎵 換 Key:</span>
@@ -142,7 +141,6 @@
           </div>
         </div>
 
-        <!-- 歌詞內文預覽 -->
         <div class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-4 overflow-y-auto font-mono text-sm leading-relaxed whitespace-pre-wrap" v-html="renderedLyrics"></div>
 
         <div class="flex gap-2 pt-2">
@@ -153,7 +151,7 @@
       </div>
     </div>
 
-    <!-- 編輯歌曲彈窗 (Modal) -->
+    <!-- 編輯歌曲彈窗 -->
     <div v-if="editModal.visible" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div class="bg-white w-full max-w-md h-[85vh] rounded-t-3xl sm:rounded-3xl p-5 flex flex-col space-y-3">
         <div class="flex justify-between items-center border-b pb-3">
@@ -179,13 +177,13 @@
             </div>
           </div>
           <div>
-            <label class="text-xs font-semibold text-slate-500 mb-1 block">歌詞內容 (支援 [C]和弦格式)</label>
+            <label class="text-xs font-semibold text-slate-500 mb-1 block">歌詞內容</label>
             <textarea v-model="editModal.song.content" rows="10" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:outline-none font-mono"></textarea>
           </div>
         </div>
 
         <div class="flex gap-2 pt-2">
-          <button @click="saveEditedSong" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow hover:bg-blue-700 transition">💾 儲存修改</button>
+          <button @click="saveEditedSong" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow">💾 儲存修改</button>
           <button @click="editModal.visible = false" class="py-3 px-5 bg-slate-200 text-slate-700 rounded-xl font-bold">取消</button>
         </div>
       </div>
@@ -300,6 +298,7 @@
           );
         });
 
+        // 強固版檔案拖曳解析與 IndexedDB 寫入
         const handleFileDrop = async (e) => {
           const files = e.dataTransfer.files;
           if (!files.length) return;
@@ -308,25 +307,31 @@
           for (let file of files) {
             const ext = file.name.split('.').pop().toLowerCase();
             const title = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            let extractedText = '';
 
-            if (ext === 'pdf') {
-              try {
+            try {
+              if (ext === 'pdf') {
                 const arrayBuffer = await file.arrayBuffer();
                 const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                 const pdfDoc = await loadingTask.promise;
-                let extractedText = '';
-
                 for (let i = 1; i <= pdfDoc.numPages; i++) {
                   const page = await pdfDoc.getPage(i);
                   const textContent = await page.getTextContent();
-                  const pageText = textContent.items.map(item => item.str).join(' ');
-                  extractedText += pageText + '\n';
+                  extractedText += textContent.items.map(item => item.str).join(' ') + '\n';
                 }
+              } else if (ext === 'docx') {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                extractedText = result.value;
+              } else if (ext === 'txt' || ext === 'md') {
+                extractedText = await file.text();
+              }
 
+              if (extractedText && extractedText.trim()) {
                 const newSong = {
                   id: crypto.randomUUID(),
                   title: title,
-                  artist: 'PDF 匯入',
+                  artist: ext.toUpperCase() + ' 匯入',
                   key: 'C',
                   content: extractedText.trim(),
                   createdAt: new Date().toISOString()
@@ -334,52 +339,17 @@
                 await dbPut(newSong);
                 songs.value.unshift(newSong);
                 count++;
-              } catch (err) {
-                console.error(`解析 PDF 失敗: ${file.name}`);
               }
-            } 
-            else if (ext === 'docx') {
-              try {
-                const arrayBuffer = await file.arrayBuffer();
-                const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-                const newSong = {
-                  id: crypto.randomUUID(),
-                  title: title,
-                  artist: 'Word 匯入',
-                  key: 'C',
-                  content: result.value.trim(),
-                  createdAt: new Date().toISOString()
-                };
-                await dbPut(newSong);
-                songs.value.unshift(newSong);
-                count++;
-              } catch (err) {
-                console.error(`解析 Word 失敗: ${file.name}`);
-              }
-            } 
-            else if (ext === 'txt' || ext === 'md') {
-              try {
-                const text = await file.text();
-                const newSong = {
-                  id: crypto.randomUUID(),
-                  title: title,
-                  artist: '文字檔匯入',
-                  key: 'C',
-                  content: text.trim(),
-                  createdAt: new Date().toISOString()
-                };
-                await dbPut(newSong);
-                songs.value.unshift(newSong);
-                count++;
-              } catch (err) {
-                console.error(`解析文字檔失敗: ${file.name}`);
-              }
+            } catch (err) {
+              console.error(`解析檔案失敗: ${file.name}`, err);
             }
           }
 
           if (count > 0) {
             activeTab.value = 'library';
-            alert(`✅ 成功批次匯入 ${count} 個檔案！`);
+            alert(`✅ 成功匯入 ${count} 個檔案並寫入 App 資料庫！`);
+          } else {
+            alert('⚠️ 無法解析檔案內容，請確認檔案格式是否正確或是否有文字圖層。');
           }
         };
 
@@ -438,7 +408,7 @@
         };
 
         const deleteSong = async (id) => {
-          if (confirm('確定要徹底刪除這首歌曲嗎？')) {
+          if (confirm('確定要刪除這首歌曲嗎？')) {
             await dbDelete(id);
             songs.value = songs.value.filter(s => s.id !== id);
             detailModal.value.visible = false;
