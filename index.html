@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>智慧歌詞與寫歌工坊</title>
+  <title>智慧歌詞與寫歌工坊 (雲端同步版)</title>
   <meta name="theme-color" content="#2563eb">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -23,19 +23,21 @@
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased flex flex-col min-h-screen">
-  <!-- 綁定事件阻擋預設行為 -->
   <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-50 shadow-2xl relative"
        @dragover.prevent.stop @drop.prevent.stop="handleFileDrop">
 
     <!-- 頂部 Header -->
     <header class="bg-slate-900 text-white pt-6 pb-4 px-4 shadow-md sticky top-0 z-30">
       <div class="flex items-center justify-between">
-        <h1 class="text-base font-bold tracking-wide flex items-center gap-2">
-          <span>🎵</span> 智慧歌詞工坊
+        <h1 class="text-base font-bold tracking-wide flex items-center gap-1.5">
+          <span>🎵</span> 智慧歌詞工坊 (雲端版)
         </h1>
-        <div class="flex gap-2">
+        <div class="flex gap-1.5">
+          <button @click="syncFromCloud" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2 py-1.5 rounded-lg shadow-sm">
+            🔄 同步
+          </button>
           <span class="text-xs bg-blue-600 px-2 py-1 rounded-lg text-white font-medium self-center">共 {{ songs.length }} 首</span>
-          <button @click="exportJSON" class="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1.5 rounded-lg font-medium">備份</button>
+          <button @click="exportJSON" class="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-2 py-1.5 rounded-lg font-medium">備份</button>
         </div>
       </div>
     </header>
@@ -43,9 +45,9 @@
     <!-- 主內容區 -->
     <main class="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-4">
 
-      <!-- 拖曳與按鈕雙重上傳區塊 -->
+      <!-- 拖曳與按鈕上傳區塊 -->
       <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-4 text-center space-y-2">
-        <p class="text-xs text-blue-700 font-bold">📁 可將 PDF、Word 檔案直接拖曳至此，或點擊下方按鈕批次選取！</p>
+        <p class="text-xs text-blue-700 font-bold">📁 拖曳 PDF、Word 檔案至此，或點擊下方按鈕選取！</p>
         <label class="inline-block bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow hover:bg-blue-700 transition">
           📂 點此批次選取檔案上傳 (支援多選)
           <input type="file" multiple accept=".pdf,.docx,.txt,.md" @change="handleFileSelect" class="hidden">
@@ -195,14 +197,14 @@
     </div>
 
     <!-- 底部導航欄 -->
-    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-around py-2 z-30">
-      <button @click="activeTab = 'library'" :class="activeTab === 'library' ? 'text-blue-600' : 'text-slate-400'" class="flex flex-col items-center gap-1 flex-1">
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2 pb-safe z-30 shadow-lg">
+      <button @click="activeTab = 'library'" :class="activeTab === 'library' ? 'text-blue-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-0.5 flex-1">
         <span class="text-lg">📚</span>
-        <span class="text-[10px] font-bold">歌詞庫</span>
+        <span class="text-[10px]">歌詞庫</span>
       </button>
-      <button @click="activeTab = 'studio'" :class="activeTab === 'studio' ? 'text-blue-600' : 'text-slate-400'" class="flex flex-col items-center gap-1 flex-1">
+      <button @click="activeTab = 'studio'" :class="activeTab === 'studio' ? 'text-blue-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-0.5 flex-1">
         <span class="text-lg">✍️</span>
-        <span class="text-[10px] font-bold">寫歌創作</span>
+        <span class="text-[10px]">寫歌創作</span>
       </button>
     </nav>
   </div>
@@ -210,7 +212,10 @@
   <script>
     const { createApp, ref, computed, onMounted } = Vue;
 
-    // 全域防止瀏覽器預設開啟檔案行為 (解決畫面閃一下與跳轉問題)
+    // ⚠️ 請換成你在 Firebase 建立的專屬 Realtime Database 網址 (結尾加上 /lyrics.json)
+    const FIREBASE_URL = "https://你的專案名稱-default-rtdb.firebaseio.com/lyrics.json";
+
+    // 全域防止瀏覽器預設開啟檔案行為
     window.addEventListener('dragover', (e) => e.preventDefault());
     window.addEventListener('drop', (e) => e.preventDefault());
 
@@ -253,6 +258,18 @@
       });
     }
 
+    async function dbClearAndPutAll(songsList) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeName, 'readwrite');
+        const store = transaction.objectStore(storeName);
+        store.clear();
+        songsList.forEach(s => store.put(s));
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }
+
     async function dbDelete(id) {
       const db = await openDB();
       return new Promise((resolve, reject) => {
@@ -275,8 +292,57 @@
         const detailModal = ref({ visible: false, song: {} });
         const editModal = ref({ visible: false, song: {} });
 
+        // 同步推送到雲端
+        const syncToCloud = async () => {
+          if (FIREBASE_URL.includes("你的專案名稱")) return;
+          try {
+            await fetch(FIREBASE_URL, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(songs.value)
+            });
+          } catch (e) {
+            console.log('雲端同步失敗', e);
+          }
+        };
+
+        // 從雲端下載最新資料
+        const syncFromCloud = async (silent = false) => {
+          if (FIREBASE_URL.includes("你的專案名稱")) {
+            if (!silent) alert('請先在程式碼設定正確的 Firebase 網址！');
+            return;
+          }
+          try {
+            const res = await fetch(FIREBASE_URL);
+            const cloudData = await res.json();
+            if (cloudData) {
+              const list = Array.isArray(cloudData) ? cloudData : Object.values(cloudData);
+              songs.value = list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+              await dbClearAndPutAll(songs.value);
+              if (!silent) alert(`☁️ 雲端同步成功！目前共有 ${songs.value.length} 首歌曲。`);
+            } else {
+              if (!silent) alert('雲端目前尚無資料。');
+            }
+          } catch (e) {
+            if (!silent) alert('無法連線至雲端資料庫');
+          }
+        };
+
         onMounted(async () => {
           try {
+            // 先嘗試從雲端讀取最新資料
+            if (!FIREBASE_URL.includes("你的專案名稱")) {
+              const res = await fetch(FIREBASE_URL);
+              const cloudData = await res.json();
+              if (cloudData) {
+                const list = Array.isArray(cloudData) ? cloudData : Object.values(cloudData);
+                songs.value = list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                await dbClearAndPutAll(songs.value);
+                return;
+              }
+            }
+
+            // 若無雲端或離線，讀取本機 IndexedDB
             const data = await dbGetAll();
             if (data && data.length > 0) {
               songs.value = data.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -291,9 +357,10 @@
               };
               await dbPut(defaultSong);
               songs.value = [defaultSong];
+              await syncToCloud();
             }
           } catch (err) {
-            console.error('載入資料庫失敗', err);
+            console.error('初始化資料失敗', err);
           }
         });
 
@@ -307,7 +374,7 @@
           );
         });
 
-        // 共用檔案解析核心邏輯
+        // 檔案解析與雲端寫入
         const processFiles = async (files) => {
           if (!files || !files.length) return;
 
@@ -354,24 +421,23 @@
           }
 
           if (count > 0) {
+            await syncToCloud();
             activeTab.value = 'library';
-            alert(`✅ 成功匯入 ${count} 個檔案並寫入 App 資料庫！`);
+            alert(`✅ 成功匯入 ${count} 個檔案並同步至雲端！`);
           } else {
-            alert('⚠️ 無法解析檔案內容，請確認檔案格式是否正確或是否有文字圖層。');
+            alert('⚠️ 無法解析檔案內容，請確認檔案格式是否正確。');
           }
         };
 
-        // 支援拖曳匯入
         const handleFileDrop = async (e) => {
           e.preventDefault();
           e.stopPropagation();
           await processFiles(e.dataTransfer.files);
         };
 
-        // 支援點擊按鈕選取匯入 (最推薦，可一次選取多個檔案)
         const handleFileSelect = async (e) => {
           await processFiles(e.target.files);
-          e.target.value = ''; // 清空以允許重複選取相同檔案
+          e.target.value = '';
         };
 
         const saveSong = async () => {
@@ -389,9 +455,10 @@
           };
           await dbPut(newSong);
           songs.value.unshift(newSong);
+          await syncToCloud();
           songForm.value = { title: '', artist: '', key: 'C', content: '' };
           activeTab.value = 'library';
-          alert('✅ 歌曲已成功儲存！');
+          alert('✅ 歌曲已成功儲存並同步至雲端！');
         };
 
         const openSongDetail = (song) => {
@@ -416,8 +483,9 @@
           if (index !== -1) {
             songs.value[index] = { ...s };
           }
+          await syncToCloud();
           editModal.value.visible = false;
-          alert('✅ 歌曲修改已儲存！');
+          alert('✅ 歌曲修改已儲存並同步！');
         };
 
         const updateSongKey = async (song) => {
@@ -426,12 +494,14 @@
           if (index !== -1) {
             songs.value[index].key = song.key;
           }
+          await syncToCloud();
         };
 
         const deleteSong = async (id) => {
           if (confirm('確定要刪除這首歌曲嗎？')) {
             await dbDelete(id);
             songs.value = songs.value.filter(s => s.id !== id);
+            await syncToCloud();
             detailModal.value.visible = false;
           }
         };
@@ -459,13 +529,13 @@
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Lyrics_Backup_${new Date().toISOString().substring(0,10)}.json`;
+          a.download = `Lyrics_CloudBackup_${new Date().toISOString().substring(0,10)}.json`;
           a.click();
         };
 
         return {
           activeTab, searchKeyword, showChords, songs, songForm, detailModal, editModal,
-          filteredSongs, handleFileDrop, handleFileSelect, saveSong, openSongDetail, openEditModal, saveEditedSong, updateSongKey, deleteSong, insertChord, renderedLyrics, exportJSON
+          filteredSongs, handleFileDrop, handleFileSelect, saveSong, openSongDetail, openEditModal, saveEditedSong, updateSongKey, deleteSong, insertChord, renderedLyrics, exportJSON, syncFromCloud
         };
       }
     }).mount('#app');
