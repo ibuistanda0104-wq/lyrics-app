@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>智慧歌詞與寫歌工坊</title>
+  <title>智慧歌詞與寫歌工坊 (大容量版)</title>
   <meta name="theme-color" content="#2563eb">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -29,10 +29,13 @@
     <!-- 頂部 Header -->
     <header class="bg-slate-900 text-white pt-6 pb-4 px-4 shadow-md sticky top-0 z-30">
       <div class="flex items-center justify-between">
-        <h1 class="text-lg font-bold tracking-wide flex items-center gap-2">
-          <span>🎵</span> 智慧歌詞與寫歌工坊
+        <h1 class="text-base font-bold tracking-wide flex items-center gap-2">
+          <span>🎵</span> 智慧歌詞工坊 (大容量)
         </h1>
-        <button @click="exportJSON" class="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1.5 rounded-lg font-medium">備份</button>
+        <div class="flex gap-2">
+          <span class="text-xs bg-blue-600 px-2 py-1 rounded-lg text-white font-medium self-center">共 {{ songs.length }} 首</span>
+          <button @click="exportJSON" class="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1.5 rounded-lg font-medium">備份</button>
+        </div>
       </div>
     </header>
 
@@ -41,13 +44,13 @@
 
       <!-- 拖曳上傳提示橫幅 -->
       <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-3 text-center text-xs text-blue-700">
-        📁 可直接將 <b>PDF (.pdf)</b>、<b>Word (.docx)</b> 或文字檔拖曳至畫面任意處自動建檔！
+        📁 支援大容量 IndexedDB：可一次拖曳數百個 <b>PDF</b>、<b>Word</b> 檔自動建檔！
       </div>
 
       <!-- Tab 1: 歌詞庫與搜尋 -->
       <div v-show="activeTab === 'library'" class="space-y-4">
         <div class="flex gap-2">
-          <input type="text" v-model="searchKeyword" placeholder="🔍 搜尋歌名、作者或歌詞關鍵字..." class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="text" v-model="searchKeyword" placeholder="🔍 搜尋 2000+ 首歌曲、作者或歌詞關鍵字..." class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
 
         <div class="space-y-2">
@@ -60,7 +63,7 @@
               <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold">Key: {{ song.key || 'C' }}</span>
             </div>
             <p class="text-xs text-slate-500">作者 / 來源：{{ song.artist || '未填寫' }}</p>
-            <p class="text-xs text-slate-400 truncate mt-1">{{ song.content.substring(0, 40) }}...</p>
+            <p class="text-xs text-slate-400 truncate mt-1">{{ (song.content || '').substring(0, 40) }}...</p>
           </div>
         </div>
       </div>
@@ -80,7 +83,7 @@
             </div>
             <div>
               <label class="text-xs font-semibold text-slate-500 mb-1 block">調性 (Key)</label>
-              <select v-model="songForm.key" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+              <select v-model="songForm.key" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 text-sm">
                 <option v-for="k in ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Am', 'Em', 'Dm', 'Bm']" :key="k" :value="k">{{ k }}</option>
               </select>
             </div>
@@ -118,7 +121,6 @@
           <button @click="detailModal.visible = false" class="text-slate-400 text-lg font-bold px-2">✕</button>
         </div>
 
-        <!-- 和弦顯示模式切換 -->
         <div class="flex bg-slate-100 p-1 rounded-xl">
           <button @click="showChords = true" :class="showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600'" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">🎸 顯示和弦</button>
           <button @click="showChords = false" :class="!showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600'" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">📜 純歌詞模式</button>
@@ -147,33 +149,109 @@
   </div>
 
   <script>
-    const { createApp, ref, computed } = Vue;
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    // IndexedDB 輔助層 (大容量支援 2000+ 檔案)
+    const dbName = 'LyricsAppDB';
+    const storeName = 'songs';
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.createObjectStore(storeName, { keyPath: 'id' });
+          }
+        };
+      });
+    }
+
+    async function dbGetAll() {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeName, 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function dbPut(song) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeName, 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.put(song);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function dbDelete(id) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeName, 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
     createApp({
       setup() {
         const activeTab = ref('library');
         const searchKeyword = ref('');
         const showChords = ref(true);
-
-        const songs = ref(JSON.parse(localStorage.getItem('lyrics_app_data')) || [
-          { id: '1', title: '晴天範例曲', artist: '周杰倫', key: 'G', content: '[G]故事的小黃花[D] 從出生那年就飄[Em]著\n[C]童年的盪鞦韆[D] 隨記憶一直晃到[G]現在' }
-        ]);
+        const songs = ref([]);
 
         const songForm = ref({ title: '', artist: '', key: 'C', content: '' });
         const detailModal = ref({ visible: false, song: {} });
 
-        const saveData = () => localStorage.setItem('lyrics_app_data', JSON.stringify(songs.value));
+        // 初始化載入 IndexedDB 資料
+        onMounted(async () => {
+          try {
+            const data = await dbGetAll();
+            if (data && data.length > 0) {
+              songs.value = data.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            } else {
+              // 預設示範曲
+              const defaultSong = {
+                id: '1',
+                title: '晴天範例曲',
+                artist: '周杰倫',
+                key: 'G',
+                content: '[G]故事的小黃花[D] 從出生那年就飄[Em]著\n[C]童年的盪鞦韆[D] 隨記憶一直晃到[G]現在',
+                createdAt: new Date().toISOString()
+              };
+              await dbPut(defaultSong);
+              songs.value = [defaultSong];
+            }
+          } catch (err) {
+            console.error('載入資料庫失敗', err);
+          }
+        });
 
         const filteredSongs = computed(() => {
           if (!searchKeyword.value.trim()) return songs.value;
           const kw = searchKeyword.value.toLowerCase();
-          return songs.value.filter(s => s.title.toLowerCase().includes(kw) || s.artist.toLowerCase().includes(kw) || s.content.toLowerCase().includes(kw));
+          return songs.value.filter(s => 
+            (s.title && s.title.toLowerCase().includes(kw)) || 
+            (s.artist && s.artist.toLowerCase().includes(kw)) || 
+            (s.content && s.content.toLowerCase().includes(kw))
+          );
         });
 
-        // 支援批次拖曳 PDF、Word (.docx) 或文字檔自動匯入
+        // 支援批次拖曳大量 PDF、Word 檔案自動匯入
         const handleFileDrop = async (e) => {
           const files = e.dataTransfer.files;
           if (!files.length) return;
 
+          let count = 0;
           for (let file of files) {
             const ext = file.name.split('.').pop().toLowerCase();
             const title = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
@@ -192,79 +270,84 @@
                   extractedText += pageText + '\n';
                 }
 
-                songs.value.unshift({
+                const newSong = {
                   id: crypto.randomUUID(),
                   title: title,
                   artist: 'PDF 匯入',
                   key: 'C',
-                  content: extractedText.trim()
-                });
-                saveData();
-                activeTab.value = 'library';
-                alert(`✅ PDF 檔案「${title}」已成功解析並建檔！`);
+                  content: extractedText.trim(),
+                  createdAt: new Date().toISOString()
+                };
+                await dbPut(newSong);
+                songs.value.unshift(newSong);
+                count++;
               } catch (err) {
-                alert(`解析 PDF 失敗: ${file.name}`);
+                console.error(`解析 PDF 失敗: ${file.name}`);
               }
             } 
             else if (ext === 'docx') {
-              const reader = new FileReader();
-              reader.onload = async function(event) {
-                try {
-                  const result = await mammoth.extractRawText({ arrayBuffer: event.target.result });
-                  songs.value.unshift({
-                    id: crypto.randomUUID(),
-                    title: title,
-                    artist: 'Word 匯入',
-                    key: 'C',
-                    content: result.value.trim()
-                  });
-                  saveData();
-                  activeTab.value = 'library';
-                  alert(`✅ Word 檔案「${title}」已成功解析並建檔！`);
-                } catch (err) {
-                  alert(`解析 Word 失敗: ${file.name}`);
-                }
-              };
-              reader.readAsArrayBuffer(file);
+              try {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                const newSong = {
+                  id: crypto.randomUUID(),
+                  title: title,
+                  artist: 'Word 匯入',
+                  key: 'C',
+                  content: result.value.trim(),
+                  createdAt: new Date().toISOString()
+                };
+                await dbPut(newSong);
+                songs.value.unshift(newSong);
+                count++;
+              } catch (err) {
+                console.error(`解析 Word 失敗: ${file.name}`);
+              }
             } 
             else if (ext === 'txt' || ext === 'md') {
-              const reader = new FileReader();
-              reader.onload = function(event) {
-                songs.value.unshift({
+              try {
+                const text = await file.text();
+                const newSong = {
                   id: crypto.randomUUID(),
                   title: title,
                   artist: '文字檔匯入',
                   key: 'C',
-                  content: event.target.result.trim()
-                });
-                saveData();
-                activeTab.value = 'library';
-                alert(`✅ 文字檔「${title}」已成功匯入建檔！`);
-              };
-              reader.readAsText(file);
-            } 
-            else {
-              alert(`目前支援直接拖曳 .pdf、.docx 與 .txt 檔案：${file.name}`);
+                  content: text.trim(),
+                  createdAt: new Date().toISOString()
+                };
+                await dbPut(newSong);
+                songs.value.unshift(newSong);
+                count++;
+              } catch (err) {
+                console.error(`解析文字檔失敗: ${file.name}`);
+              }
             }
+          }
+
+          if (count > 0) {
+            activeTab.value = 'library';
+            alert(`✅ 成功批次匯入 ${count} 個檔案進資料庫！`);
           }
         };
 
-        const saveSong = () => {
+        const saveSong = async () => {
           if (!songForm.value.title.trim() || !songForm.value.content.trim()) {
             alert('請填寫歌名與歌詞內容！');
             return;
           }
-          songs.value.unshift({
+          const newSong = {
             id: crypto.randomUUID(),
             title: songForm.value.title.trim(),
             artist: songForm.value.artist.trim(),
             key: songForm.value.key,
-            content: songForm.value.content
-          });
-          saveData();
+            content: songForm.value.content,
+            createdAt: new Date().toISOString()
+          };
+          await dbPut(newSong);
+          songs.value.unshift(newSong);
           songForm.value = { title: '', artist: '', key: 'C', content: '' };
           activeTab.value = 'library';
-          alert('✅ 歌曲已成功儲存！');
+          alert('✅ 歌曲已成功儲存至大容量資料庫！');
         };
 
         const openSongDetail = (song) => {
@@ -273,10 +356,10 @@
           detailModal.value.visible = true;
         };
 
-        const deleteSong = (id) => {
+        const deleteSong = async (id) => {
           if (confirm('確定要刪除這首歌曲嗎？')) {
+            await dbDelete(id);
             songs.value = songs.value.filter(s => s.id !== id);
-            saveData();
             detailModal.value.visible = false;
           }
         };
@@ -304,7 +387,7 @@
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Lyrics_Backup_${new Date().toISOString().substring(0,10)}.json`;
+          a.download = `Lyrics_LargeScale_Backup_${new Date().toISOString().substring(0,10)}.json`;
           a.click();
         };
 
