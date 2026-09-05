@@ -3,27 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>智慧歌詞與寫歌系統</title>
-  <link rel="manifest" href="manifest.json">
+  <title>智慧歌詞與寫歌工坊</title>
   <meta name="theme-color" content="#2563eb">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3022/3022291.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Mammoth.js 用於解析 Word .docx -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <!-- PDF.js 用於解析 PDF 檔案 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <style>
     body { -webkit-tap-highlight-color: transparent; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     input, textarea, select { user-select: auto; }
-    .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
-    .pt-safe { padding-top: env(safe-area-inset-top, 16px); }
     .chord { color: #2563eb; font-weight: bold; background: #eff6ff; padding: 0 4px; border-radius: 4px; font-size: 0.9em; margin: 0 2px; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased flex flex-col min-h-screen">
-  <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-50 shadow-2xl relative">
+  <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-50 shadow-2xl relative"
+       @dragover.prevent @drop.prevent="handleFileDrop">
 
-    <header class="bg-slate-900 text-white pt-safe pb-4 px-4 shadow-md sticky top-0 z-30">
-      <div class="flex items-center justify-between mt-2">
+    <!-- 頂部 Header -->
+    <header class="bg-slate-900 text-white pt-6 pb-4 px-4 shadow-md sticky top-0 z-30">
+      <div class="flex items-center justify-between">
         <h1 class="text-lg font-bold tracking-wide flex items-center gap-2">
           <span>🎵</span> 智慧歌詞與寫歌工坊
         </h1>
@@ -31,28 +36,36 @@
       </div>
     </header>
 
+    <!-- 主內容區 -->
     <main class="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-4">
-      <!-- 歌詞庫 Tab -->
+
+      <!-- 拖曳上傳提示橫幅 -->
+      <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-3 text-center text-xs text-blue-700">
+        📁 可直接將 <b>PDF (.pdf)</b>、<b>Word (.docx)</b> 或文字檔拖曳至畫面任意處自動建檔！
+      </div>
+
+      <!-- Tab 1: 歌詞庫與搜尋 -->
       <div v-show="activeTab === 'library'" class="space-y-4">
         <div class="flex gap-2">
           <input type="text" v-model="searchKeyword" placeholder="🔍 搜尋歌名、作者或歌詞關鍵字..." class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
+
         <div class="space-y-2">
           <div v-if="filteredSongs.length === 0" class="bg-white rounded-2xl p-8 text-center text-slate-400 text-sm border border-slate-200">
-            尚無歌詞資料，請至「寫歌創作」或「檔案匯入說明」加入歌曲 🎼
+            尚無歌詞資料，請至「寫歌創作」新增或直接拖曳 PDF / Word 檔案進來 🎼
           </div>
           <div v-for="song in filteredSongs" :key="song.id" @click="openSongDetail(song)" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 active:bg-slate-50 cursor-pointer transition space-y-1">
             <div class="flex justify-between items-start">
               <h3 class="font-bold text-slate-800 text-base">{{ song.title }}</h3>
               <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold">Key: {{ song.key || 'C' }}</span>
             </div>
-            <p class="text-xs text-slate-500">作者 / 歌手：{{ song.artist || '未填寫' }}</p>
+            <p class="text-xs text-slate-500">作者 / 來源：{{ song.artist || '未填寫' }}</p>
             <p class="text-xs text-slate-400 truncate mt-1">{{ song.content.substring(0, 40) }}...</p>
           </div>
         </div>
       </div>
 
-      <!-- 寫歌創作 Tab -->
+      <!-- Tab 2: 寫歌創作工坊 -->
       <div v-show="activeTab === 'studio'" class="space-y-4">
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
           <h3 class="font-bold text-slate-800 text-sm">✍️ 建立新歌詞 / 寫歌創作</h3>
@@ -72,6 +85,7 @@
               </select>
             </div>
           </div>
+
           <div>
             <label class="text-xs font-semibold text-slate-500 mb-1 block">快速插入和弦</label>
             <div class="flex flex-wrap gap-1">
@@ -80,33 +94,20 @@
               </button>
             </div>
           </div>
+
           <div>
             <label class="text-xs font-semibold text-slate-500 mb-1 block">歌詞內容 (支援和弦格式，如 [C]你好)</label>
             <textarea id="songContentArea" v-model="songForm.content" rows="8" placeholder="[C]這是一個[G]寫歌範例..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:outline-none font-mono"></textarea>
           </div>
+
           <button @click="saveSong" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow hover:bg-blue-700 transition">
             💾 儲存歌曲至庫
           </button>
         </div>
       </div>
-
-      <!-- 檔案匯入說明 Tab -->
-      <div v-show="activeTab === 'import'" class="space-y-4">
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
-          <h3 class="font-bold text-slate-800 text-sm">📂 如何統整 Google 裡的 PDF 與 Word 歌詞？</h3>
-          <p class="text-xs text-slate-600 leading-relaxed">
-            由於瀏覽器資安限制，無法直接遠端讀取您私人 Google 雲端硬碟裡的本機檔案，最完美的統整方式如下：
-          </p>
-          <div class="space-y-2 text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <p>1. <b>開啟 Google 檔</b>：在電腦或平板打開您的 Google 雲端 Word 或 PDF 歌詞檔。</p>
-            <p>2. <b>複製文字</b>：將歌詞與和弦內容全選並複製（Ctrl+C / ⌘+C）。</p>
-            <p>3. <b>貼入系統</b>：切換至本系統的 <b>「寫歌創作」</b> 分頁貼上，填入歌名與調性後點擊儲存即可完成統整！</p>
-          </div>
-        </div>
-      </div>
     </main>
 
-    <!-- 檢視歌詞彈窗 -->
+    <!-- 檢視歌詞與和弦切換彈窗 -->
     <div v-if="detailModal.visible" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div class="bg-white w-full max-w-md h-[85vh] rounded-t-3xl sm:rounded-3xl p-5 flex flex-col space-y-3">
         <div class="flex justify-between items-center border-b pb-3">
@@ -116,11 +117,15 @@
           </div>
           <button @click="detailModal.visible = false" class="text-slate-400 text-lg font-bold px-2">✕</button>
         </div>
+
+        <!-- 和弦顯示模式切換 -->
         <div class="flex bg-slate-100 p-1 rounded-xl">
           <button @click="showChords = true" :class="showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600'" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">🎸 顯示和弦</button>
           <button @click="showChords = false" :class="!showChords ? 'bg-blue-600 text-white shadow' : 'text-slate-600'" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">📜 純歌詞模式</button>
         </div>
+
         <div class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-4 overflow-y-auto font-mono text-sm leading-relaxed whitespace-pre-wrap" v-html="renderedLyrics"></div>
+
         <div class="flex gap-2 pt-2">
           <button @click="deleteSong(detailModal.song.id)" class="py-2.5 px-4 bg-rose-100 text-rose-600 rounded-xl text-xs font-bold">🗑️ 刪除</button>
           <button @click="detailModal.visible = false" class="flex-1 py-2.5 bg-slate-800 text-white rounded-xl text-xs font-bold">關閉</button>
@@ -129,7 +134,7 @@
     </div>
 
     <!-- 底部導航欄 -->
-    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-around py-2 pb-safe z-30">
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-around py-2 z-30">
       <button @click="activeTab = 'library'" :class="activeTab === 'library' ? 'text-blue-600' : 'text-slate-400'" class="flex flex-col items-center gap-1 flex-1">
         <span class="text-lg">📚</span>
         <span class="text-[10px] font-bold">歌詞庫</span>
@@ -138,32 +143,112 @@
         <span class="text-lg">✍️</span>
         <span class="text-[10px] font-bold">寫歌創作</span>
       </button>
-      <button @click="activeTab = 'import'" :class="activeTab === 'import' ? 'text-blue-600' : 'text-slate-400'" class="flex flex-col items-center gap-1 flex-1">
-        <span class="text-lg">📂</span>
-        <span class="text-[10px] font-bold">檔案匯入</span>
-      </button>
     </nav>
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted } = Vue;
+    const { createApp, ref, computed } = Vue;
     createApp({
       setup() {
         const activeTab = ref('library');
         const searchKeyword = ref('');
         const showChords = ref(true);
+
         const songs = ref(JSON.parse(localStorage.getItem('lyrics_app_data')) || [
           { id: '1', title: '晴天範例曲', artist: '周杰倫', key: 'G', content: '[G]故事的小黃花[D] 從出生那年就飄[Em]著\n[C]童年的盪鞦韆[D] 隨記憶一直晃到[G]現在' }
         ]);
+
         const songForm = ref({ title: '', artist: '', key: 'C', content: '' });
         const detailModal = ref({ visible: false, song: {} });
 
         const saveData = () => localStorage.setItem('lyrics_app_data', JSON.stringify(songs.value));
+
         const filteredSongs = computed(() => {
           if (!searchKeyword.value.trim()) return songs.value;
           const kw = searchKeyword.value.toLowerCase();
           return songs.value.filter(s => s.title.toLowerCase().includes(kw) || s.artist.toLowerCase().includes(kw) || s.content.toLowerCase().includes(kw));
         });
+
+        // 支援批次拖曳 PDF、Word (.docx) 或文字檔自動匯入
+        const handleFileDrop = async (e) => {
+          const files = e.dataTransfer.files;
+          if (!files.length) return;
+
+          for (let file of files) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            const title = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+
+            if (ext === 'pdf') {
+              try {
+                const arrayBuffer = await file.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pdfDoc = await loadingTask.promise;
+                let extractedText = '';
+
+                for (let i = 1; i <= pdfDoc.numPages; i++) {
+                  const page = await pdfDoc.getPage(i);
+                  const textContent = await page.getTextContent();
+                  const pageText = textContent.items.map(item => item.str).join(' ');
+                  extractedText += pageText + '\n';
+                }
+
+                songs.value.unshift({
+                  id: crypto.randomUUID(),
+                  title: title,
+                  artist: 'PDF 匯入',
+                  key: 'C',
+                  content: extractedText.trim()
+                });
+                saveData();
+                activeTab.value = 'library';
+                alert(`✅ PDF 檔案「${title}」已成功解析並建檔！`);
+              } catch (err) {
+                alert(`解析 PDF 失敗: ${file.name}`);
+              }
+            } 
+            else if (ext === 'docx') {
+              const reader = new FileReader();
+              reader.onload = async function(event) {
+                try {
+                  const result = await mammoth.extractRawText({ arrayBuffer: event.target.result });
+                  songs.value.unshift({
+                    id: crypto.randomUUID(),
+                    title: title,
+                    artist: 'Word 匯入',
+                    key: 'C',
+                    content: result.value.trim()
+                  });
+                  saveData();
+                  activeTab.value = 'library';
+                  alert(`✅ Word 檔案「${title}」已成功解析並建檔！`);
+                } catch (err) {
+                  alert(`解析 Word 失敗: ${file.name}`);
+                }
+              };
+              reader.readAsArrayBuffer(file);
+            } 
+            else if (ext === 'txt' || ext === 'md') {
+              const reader = new FileReader();
+              reader.onload = function(event) {
+                songs.value.unshift({
+                  id: crypto.randomUUID(),
+                  title: title,
+                  artist: '文字檔匯入',
+                  key: 'C',
+                  content: event.target.result.trim()
+                });
+                saveData();
+                activeTab.value = 'library';
+                alert(`✅ 文字檔「${title}」已成功匯入建檔！`);
+              };
+              reader.readAsText(file);
+            } 
+            else {
+              alert(`目前支援直接拖曳 .pdf、.docx 與 .txt 檔案：${file.name}`);
+            }
+          }
+        };
+
         const saveSong = () => {
           if (!songForm.value.title.trim() || !songForm.value.content.trim()) {
             alert('請填寫歌名與歌詞內容！');
@@ -181,11 +266,13 @@
           activeTab.value = 'library';
           alert('✅ 歌曲已成功儲存！');
         };
+
         const openSongDetail = (song) => {
           detailModal.value.song = song;
           showChords.value = true;
           detailModal.value.visible = true;
         };
+
         const deleteSong = (id) => {
           if (confirm('確定要刪除這首歌曲嗎？')) {
             songs.value = songs.value.filter(s => s.id !== id);
@@ -193,6 +280,7 @@
             detailModal.value.visible = false;
           }
         };
+
         const insertChord = (chord) => {
           const textarea = document.getElementById('songContentArea');
           if (!textarea) return;
@@ -201,6 +289,7 @@
           const text = songForm.value.content;
           songForm.value.content = text.substring(0, start) + chord + text.substring(end);
         };
+
         const renderedLyrics = computed(() => {
           const text = detailModal.value.song.content || '';
           if (showChords.value) {
@@ -209,6 +298,7 @@
             return text.replace(/\[(.*?)\]/g, '');
           }
         });
+
         const exportJSON = () => {
           const blob = new Blob([JSON.stringify(songs.value, null, 2)], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -217,12 +307,10 @@
           a.download = `Lyrics_Backup_${new Date().toISOString().substring(0,10)}.json`;
           a.click();
         };
-        onMounted(() => {
-          if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(err => console.log(err));
-        });
+
         return {
           activeTab, searchKeyword, showChords, songs, songForm, detailModal,
-          filteredSongs, saveSong, openSongDetail, deleteSong, insertChord, renderedLyrics, exportJSON
+          filteredSongs, handleFileDrop, saveSong, openSongDetail, deleteSong, insertChord, renderedLyrics, exportJSON
         };
       }
     }).mount('#app');
