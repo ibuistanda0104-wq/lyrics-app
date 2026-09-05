@@ -1,0 +1,21 @@
+{
+  "name": "智慧歌詞與寫歌創作系統",
+  "short_name": "歌詞App",
+  "description": "跨平台歌詞統整、和弦切換與寫歌創作工具",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3022/3022291.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3022/3022291.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
